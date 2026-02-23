@@ -240,7 +240,7 @@ class RAGService:
                 page_num = vlm_hit["page_number"]
                 pdf_name = search_results[0].get("metadata", {}).get("pdf_name", "Unknown")
                 answer = (
-                    f"**{product.get('product', product_query.title())} Offer** (Page {page_num}):\n\n"
+                    f"**🍪 {product.get('product', product_query.title())} Offer (Page {page_num}):**\n\n"
                     f"💰 **Discounted Price:** {product.get('price', 'N/A')}\n"
                     f"📉 **Discount:** {product.get('discount', 'N/A')}\n"
                     f"💵 **Original Price:** {product.get('original_price', 'N/A')}\n"

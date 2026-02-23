@@ -8,9 +8,11 @@ A Retrieval-Augmented Generation (RAG) system that allows you to upload PDF docu
 
 **Visual citation crop (from the sample Carrefour flyer):**
 
+![Streamlit citation view](static/citations/Citation_Streamlit.png)
+
 ![Oreo offer crop](static/citations/8cb29edc_page_1_crop_d0585ffd.png)
 
-git## 🎯 Features
+## 🎯 Features
 
 - **PDF Upload**: Upload and process PDF documents
 - **Question Answering**: Ask questions about your uploaded PDFs

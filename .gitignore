@@ -24,6 +24,7 @@ chroma_db/
 !static/citations/
 static/citations/*
 !static/citations/8cb29edc_page_1_crop_d0585ffd.png
+!static/citations/Citation_Streamlit.png
 
 # IDE
 .vscode/

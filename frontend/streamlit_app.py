@@ -6,14 +6,15 @@ import time
 
 # Configuration
 API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000")
+BASE_DIR = Path(__file__).resolve().parents[1]
 
 st.set_page_config(
-    page_title="PDF RAG System",
+    page_title="Vision Multimodal Carrefour Flyer PDF RAG",
     page_icon="📚",
     layout="wide"
 )
 
-st.title("📚 PDF RAG System")
+st.title("📚 Vision Multimodal Carrefour Flyer PDF RAG")
 st.markdown("Upload PDFs and ask questions with citation support")
 
 # Initialize session state
@@ -163,6 +164,16 @@ with st.sidebar:
     )
     st.session_state.use_multimodal = use_multimodal
 
+    relevance_threshold = st.slider(
+        "Minimum relevance score",
+        min_value=0.0,
+        max_value=1.0,
+        value=0.25,
+        step=0.01,
+        help="Hide citations below this relevance score."
+    )
+    st.session_state.relevance_threshold = relevance_threshold
+
 
 # Main content area
 tab1, tab2 = st.tabs(["💬 Chat", "📊 About"])
@@ -171,15 +182,26 @@ with tab1:
     # Display chat messages
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
-            st.markdown(message["content"])
+            if message["role"] == "assistant":
+                formatted = message["content"].replace("\n", "<br>")
+                st.markdown(formatted, unsafe_allow_html=True)
+            else:
+                st.markdown(message["content"])
             
             # Show citations if available
             if message["role"] == "assistant" and "citations" in message:
                 with st.expander("📎 Citations", expanded=False):
-                    for i, citation in enumerate(message["citations"], 1):
+                    threshold = st.session_state.get("relevance_threshold", 0.0)
+                    filtered = [
+                        c for c in message["citations"]
+                        if c.get("relevance_score") is None or c.get("relevance_score", 0) >= threshold
+                    ]
+                    if not filtered:
+                        st.info("No citations match the relevance filter.")
+                    for i, citation in enumerate(filtered, 1):
                         st.markdown(f"**Source {i}** - Page {citation['page_number']} of *{citation['pdf_name']}*")
                         st.markdown(f"*Relevance: {citation.get('relevance_score', 'N/A'):.2f}*" if citation.get('relevance_score') else "")
-                        st.markdown(f"*Snippet: {citation['text_snippet']}*")
+                        snippet_text = citation.get("text_snippet", "")
                         
                         # Display cropped citation image first (product-level), then full page
                         page_num = citation.get('page_number')
@@ -191,84 +213,81 @@ with tab1:
                         full_url = citation.get("image_url")
 
                         # Prefer local file paths when available (more reliable than HTTP)
-                        crop_path = citation.get("crop_image_path")
-                        full_path = citation.get("image_path")
+                        def resolve_local_path(path_value):
+                            if not path_value:
+                                return None
+                            if os.path.isabs(path_value):
+                                return path_value
+                            candidate = BASE_DIR / path_value
+                            return str(candidate) if candidate.exists() else path_value
+
+                        crop_path = resolve_local_path(citation.get("crop_image_path"))
+                        full_path = resolve_local_path(citation.get("image_path"))
+
+                        def render_image_bytes(img_bytes, caption, height_scale=0.4):
+                            try:
+                                # Resize to ~3/4 height, keep aspect ratio
+                                from PIL import Image
+                                import io
+                                img = Image.open(io.BytesIO(img_bytes))
+                                new_height = max(1, int(img.height * height_scale))
+                                new_width = max(1, int(img.width * height_scale))
+                                resized = img.resize((new_width, new_height), Image.LANCZOS)
+                                # Render at the resized dimensions
+                                st.image(resized, caption=caption)
+                                return True
+                            except Exception as e:
+                                st.warning(f"Image render failed: {e}")
+                                return False
 
                         # Try to display cropped image first
                         if crop_path and os.path.exists(crop_path):
                             try:
-                                st.image(
-                                    crop_path,
-                                    caption=f"🍪 Cropped Product View - Page {page_num}",
-                                    use_container_width=True,
-                                )
-                                image_displayed = True
-                            except Exception:
+                                with open(crop_path, "rb") as f:
+                                    image_displayed = render_image_bytes(
+                                        f.read(),
+                                        f"🍪 Cropped Product View - Page {page_num}",
+                                    )
+                            except Exception as e:
+                                st.warning(f"Failed to read cropped image: {e}")
                                 image_displayed = False
                         elif crop_url:
                             try:
                                 import requests
-                                from PIL import Image
-                                import io
-                                
                                 # Fetch and display cropped image
                                 img_response = requests.get(f"{API_BASE_URL}{crop_url}", timeout=5)
                                 if img_response.status_code == 200:
-                                    img = Image.open(io.BytesIO(img_response.content))
-                                    st.image(
-                                        img,
-                                        caption=f"🍪 Cropped Product View - Page {page_num}",
-                                        use_container_width=True,
+                                    image_displayed = render_image_bytes(
+                                        img_response.content,
+                                        f"🍪 Cropped Product View - Page {page_num}",
                                     )
-                                    image_displayed = True
                             except Exception as e:
-                                # Try direct URL as fallback
-                                try:
-                                    st.image(
-                                        f"{API_BASE_URL}{crop_url}",
-                                        caption=f"🍪 Cropped Product View - Page {page_num}",
-                                        use_container_width=True,
-                                    )
-                                    image_displayed = True
-                                except:
-                                    image_displayed = False
+                                st.warning(f"Failed to fetch cropped image: {e}")
+                                image_displayed = False
 
                         # If cropped image failed, try full page
                         if not image_displayed and full_path and os.path.exists(full_path):
                             try:
-                                st.image(
-                                    full_path,
-                                    caption=f"📄 Full Page {page_num}",
-                                    use_container_width=True,
-                                )
-                                image_displayed = True
-                            except Exception:
+                                with open(full_path, "rb") as f:
+                                    image_displayed = render_image_bytes(
+                                        f.read(),
+                                        f"📄 Full Page {page_num}",
+                                    )
+                            except Exception as e:
+                                st.warning(f"Failed to read full page image: {e}")
                                 image_displayed = False
                         elif not image_displayed and full_url:
                             try:
                                 import requests
-                                from PIL import Image
-                                import io
-                                
                                 img_response = requests.get(f"{API_BASE_URL}{full_url}", timeout=5)
                                 if img_response.status_code == 200:
-                                    img = Image.open(io.BytesIO(img_response.content))
-                                    st.image(
-                                        img,
-                                        caption=f"📄 Full Page {page_num}",
-                                        use_container_width=True,
+                                    image_displayed = render_image_bytes(
+                                        img_response.content,
+                                        f"📄 Full Page {page_num}",
                                     )
-                                    image_displayed = True
-                            except Exception:
-                                try:
-                                    st.image(
-                                        f"{API_BASE_URL}{full_url}",
-                                        caption=f"📄 Full Page {page_num}",
-                                        use_container_width=True,
-                                    )
-                                    image_displayed = True
-                                except:
-                                    image_displayed = False
+                            except Exception as e:
+                                st.warning(f"Failed to fetch full page image: {e}")
+                                image_displayed = False
 
                         # Show full page as additional option if we have both
                         if image_displayed and full_url and crop_url:
@@ -277,6 +296,10 @@ with tab1:
                                     st.image(full_path, caption=f"Full Page {page_num}", use_container_width=True)
                                 else:
                                     st.image(f"{API_BASE_URL}{full_url}", caption=f"Full Page {page_num}", use_container_width=True)
+
+                        # Show snippet under image(s)
+                        if snippet_text:
+                            st.markdown(f"*Snippet: {snippet_text}*")
 
                         # Last resort: show links only if images completely failed
                         if not image_displayed:
@@ -316,7 +339,7 @@ if prompt := st.chat_input("Ask a question about your PDFs..."):
     st.rerun()
 
 with tab2:
-    st.header("About PDF RAG System")
+    st.header("About Vision Multimodal Carrefour Flyer PDF RAG")
     st.markdown("""
     ### Features
     
