@@ -1,4 +1,4 @@
-# PDF RAG System
+# Vision Multimodal Carrefour Flyer PDF RAG System
 
 A Retrieval-Augmented Generation (RAG) system that allows you to upload PDF documents, ask questions, and get answers with visual citations showing the exact PDF pages where information is found.
 
@@ -10,7 +10,7 @@ A Retrieval-Augmented Generation (RAG) system that allows you to upload PDF docu
 
 ![Streamlit citation view](static/citations/Citation_Streamlit.png)
 
-![Oreo offer crop](static/citations/8cb29edc_page_1_crop_d0585ffd.png)
+![Full page example](static/citations/8cb29edc_page_1.png)
 
 ## 🎯 Features
 
