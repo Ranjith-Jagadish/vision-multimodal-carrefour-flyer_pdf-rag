@@ -24,9 +24,6 @@ vector_store/
 !static/citations/
 static/citations/*
 !static/citations/8cb29edc_page_1_crop_d0585ffd.png
-!_workarounds/
-_workarounds/*
-!_workarounds/TEST_OREO.md
 
 # IDE
 .vscode/

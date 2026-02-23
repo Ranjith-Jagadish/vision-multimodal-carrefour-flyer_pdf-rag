@@ -484,8 +484,6 @@ The sample Carrefour PDF includes an Oreo offer. This is the expected visual cit
 
 ![Oreo offer crop](static/citations/8cb29edc_page_1_crop_d0585ffd.png)
 
-Detailed test steps: `_workarounds/TEST_OREO.md`
-
 ### Example: Testing with Sample PDF
 
 The project includes a sample Carrefour flyer PDF. To test:
