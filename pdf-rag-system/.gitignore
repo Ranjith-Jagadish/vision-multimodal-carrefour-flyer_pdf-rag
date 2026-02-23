@@ -17,7 +17,7 @@ uploads/
 static/citations/
 static/citations copy/
 chroma_db/
-vector_store/
+/vector_store/
 
 # Published examples (keep repo clean except for these)
 !static/

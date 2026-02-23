@@ -16,6 +16,9 @@ class RAGService:
         self.ollama_base_url = ollama_base_url or "http://localhost:11434"
         self.ollama_model = ollama_model or "llama3.1:8b"
         self.openai_api_key = openai_api_key
+        self.enable_vlm_fallback = os.getenv("ENABLE_VLM_FALLBACK", "true").lower() == "true"
+        self._vlm_cache = {}
+        self._vlm_cache_limit = 128
     
     def _extract_product_name(self, question: str, context_text: str = "") -> str:
         """Extract product name from question for better image cropping."""
@@ -56,6 +59,9 @@ class RAGService:
         """Use VLM to find a product and return product info + crop path."""
         if not pdf_path or not product_query or not total_pages:
             return None
+        cache_key = f"{pdf_path}::{product_query.lower()}"
+        if cache_key in self._vlm_cache:
+            return self._vlm_cache.get(cache_key)
         try:
             from ..vlm_extractor.vlm_extractor import VLMExtractor
             vlm = VLMExtractor(provider="ollama")
@@ -81,12 +87,20 @@ class RAGService:
                             page_num,
                             product.get("product", query_lower)
                         )
-                    return {
+                    result = {
                         "page_number": page_num,
                         "product": product,
                         "crop_path": crop_path,
                         "image_path": page_image,
                     }
+                    if len(self._vlm_cache) >= self._vlm_cache_limit:
+                        self._vlm_cache.pop(next(iter(self._vlm_cache)))
+                    self._vlm_cache[cache_key] = result
+                    return result
+        result = None
+        if len(self._vlm_cache) >= self._vlm_cache_limit:
+            self._vlm_cache.pop(next(iter(self._vlm_cache)))
+        self._vlm_cache[cache_key] = result
         return None
     
     def _call_llm(self, prompt: str) -> str:
@@ -161,7 +175,7 @@ class RAGService:
         # Try hybrid search if multimodal is enabled
         if use_multimodal:
             try:
-                search_k = max(top_k * 5, 20) if "oreo" in question.lower() else min(top_k * 2, 10)
+                search_k = min(max(top_k * 3, 10), 30)
                 search_results = self.vector_store.hybrid_search(
                     question, 
                     top_k=search_k, 
@@ -171,11 +185,11 @@ class RAGService:
                 )
             except Exception as e:
                 print(f"⚠️  Hybrid search failed, falling back to text-only: {e}")
-                search_k = max(top_k * 5, 20) if "oreo" in question.lower() else min(top_k * 2, 10)
+                search_k = min(max(top_k * 3, 10), 30)
                 search_results = self.vector_store.search(question, top_k=search_k, filter_dict=filter_dict)
         else:
             # Standard text-only search
-            search_k = max(top_k * 5, 20) if "oreo" in question.lower() else min(top_k * 2, 10)
+            search_k = min(max(top_k * 3, 10), 30)
             search_results = self.vector_store.search(question, top_k=search_k, filter_dict=filter_dict)
         
         # If query mentions specific products, prioritize pages that likely contain them
@@ -191,13 +205,6 @@ class RAGService:
                 page_1_oreo = [r for r in oreo_in_results if r.get("metadata", {}).get("page_number") == 1]
                 other_oreo = [r for r in oreo_in_results if r.get("metadata", {}).get("page_number") != 1]
                 
-                # Boost relevance score for page 1 Oreo results (reduce distance = increase relevance)
-                for result in page_1_oreo:
-                    if result.get("distance"):
-                        # Significantly boost relevance (reduce distance by 70%)
-                        result["distance"] = result["distance"] * 0.3
-                
-                # Boost relevance score for page 1 Oreo results (reduce distance = increase relevance)
                 for result in page_1_oreo:
                     if result.get("distance"):
                         # Significantly boost relevance (reduce distance by 70%)
@@ -218,7 +225,13 @@ class RAGService:
 
         # Product-focused shortcut: use VLM bounding box crop when available
         product_query = self._extract_product_name(question)
-        if product_query and search_results and use_multimodal:
+        if (
+            product_query
+            and search_results
+            and use_multimodal
+            and self.enable_vlm_fallback
+            and self.vector_store.has_multimodal_data(filter_dict)
+        ):
             pdf_path = search_results[0].get("metadata", {}).get("pdf_path", "")
             total_pages = search_results[0].get("metadata", {}).get("total_pages", 0)
             vlm_hit = self._vlm_find_product(pdf_path, product_query, total_pages)
@@ -251,7 +264,13 @@ class RAGService:
                 }
 
         # If product not found in retrieved text, try VLM fallback (only when multimodal enabled)
-        if use_multimodal and product_query and search_results:
+        if (
+            use_multimodal
+            and product_query
+            and search_results
+            and self.enable_vlm_fallback
+            and self.vector_store.has_multimodal_data(filter_dict)
+        ):
             has_product = any(product_query.lower() in r.get("text", "").lower() for r in search_results)
             if not has_product:
                 pdf_path = search_results[0].get("metadata", {}).get("pdf_path", "")

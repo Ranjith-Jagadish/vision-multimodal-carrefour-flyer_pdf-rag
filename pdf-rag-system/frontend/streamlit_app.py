@@ -21,12 +21,15 @@ if "uploaded_docs" not in st.session_state:
     st.session_state.uploaded_docs = []
 if "messages" not in st.session_state:
     st.session_state.messages = []
+if "docs_cache_bust" not in st.session_state:
+    st.session_state.docs_cache_bust = 0
 
 
-def load_documents():
-    """Load list of uploaded documents."""
+@st.cache_data(show_spinner=False, ttl=10)
+def load_documents_cached(cache_bust: int):
+    """Load list of uploaded documents (cached)."""
     try:
-        response = requests.get(f"{API_BASE_URL}/api/documents")
+        response = requests.get(f"{API_BASE_URL}/api/documents", timeout=10)
         if response.status_code == 200:
             return response.json().get("documents", [])
     except Exception as e:
@@ -69,7 +72,7 @@ def query_rag(question, top_k=5, pdf_filter=None, use_multimodal=True):
             "pdf_filter": pdf_filter,
             "use_multimodal": use_multimodal
         }
-        response = requests.post(f"{API_BASE_URL}/api/query", json=payload)
+        response = requests.post(f"{API_BASE_URL}/api/query", json=payload, timeout=120)
         
         if response.status_code == 200:
             return response.json()
@@ -106,7 +109,9 @@ with st.sidebar:
                 else:
                     st.success(f"✅ {result['filename']} uploaded successfully!")
                     st.info(f"📄 {result['total_pages']} pages, {result['chunks_added']} chunks processed")
-                    st.session_state.uploaded_docs = load_documents()
+                    load_documents_cached.clear()
+                    st.session_state.docs_cache_bust += 1
+                    st.session_state.uploaded_docs = load_documents_cached(st.session_state.docs_cache_bust)
                     time.sleep(1)
                     st.rerun()
     
@@ -114,7 +119,7 @@ with st.sidebar:
     
     # List uploaded documents
     st.subheader("Uploaded Documents")
-    documents = load_documents()
+    documents = load_documents_cached(st.session_state.docs_cache_bust)
     
     if documents:
         for doc in documents:
@@ -127,7 +132,9 @@ with st.sidebar:
                         response = requests.delete(f"{API_BASE_URL}/api/documents/{doc}")
                         if response.status_code == 200:
                             st.success(f"Deleted {doc}")
-                            st.session_state.uploaded_docs = load_documents()
+                            load_documents_cached.clear()
+                            st.session_state.docs_cache_bust += 1
+                            st.session_state.uploaded_docs = load_documents_cached(st.session_state.docs_cache_bust)
                             time.sleep(1)
                             st.rerun()
                     except Exception as e:
