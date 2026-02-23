@@ -8,6 +8,8 @@ A Retrieval-Augmented Generation (RAG) system that allows you to upload PDF docu
 
 **Visual citation crop (from the sample Carrefour flyer):**
 
+**Sample PDF (download):** [6 - 15 Jan Super Deals Digital Leaflet.pdf](sample_pdf/6%20-%2015%20Jan%20Super%20Deals%20Digital%20Leaflet.pdf)
+
 ![Streamlit citation view](static/citations/Citation_Streamlit.png)
 
 ![Full page example](static/citations/8cb29edc_page_1.png)
