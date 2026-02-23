@@ -44,3 +44,5 @@ Thumbs.db
 .cache/
 models/
 
+# Local notes and scratch
+_workarounds/
