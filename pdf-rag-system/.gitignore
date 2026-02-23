@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.venv
+
+# Environment variables
+.env
+
+# Uploads and generated files
+uploads/
+static/citations/
+static/citations copy/
+chroma_db/
+vector_store/
+
+# Published examples (keep repo clean except for these)
+!static/
+!static/citations/
+static/citations/*
+!static/citations/8cb29edc_page_1_crop_d0585ffd.png
+!_workarounds/
+_workarounds/*
+!_workarounds/TEST_OREO.md
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Model cache
+.cache/
+models/
+
