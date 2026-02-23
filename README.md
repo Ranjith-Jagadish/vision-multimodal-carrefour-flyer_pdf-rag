@@ -2,6 +2,19 @@
 
 A Retrieval-Augmented Generation (RAG) system that allows you to upload PDF documents, ask questions, and get answers with visual citations showing the exact PDF pages where information is found.
 
+## 🔎 Technical Highlights
+
+- **Vision (Granite)**: **Granite 3.2 Vision** via Ollama for structured extraction (product, price, discount, and bounding boxes).
+- **Granite Prompting**: JSON-first extraction with fallbacks to regex parsing when the model output is malformed.
+- **Granite Output**: Used to drive **product-level crops** and improve visual citations.
+- **Vision (Alt)**: LLaVA as a backup VLM option.
+- **Multimodal**: Hybrid retrieval over **text + image** embeddings (CLIP).
+- **Embeddings**: Sentence Transformers (**all-MiniLM-L6-v2**) for text; **CLIP** for image/text.
+- **LLMs**: Answer generation via **Ollama** (e.g., **qwen2.5:7b**) or **OpenAI**.
+- **vLLM**: Optional alternative server for LLMs (drop-in replacement if configured).
+- **Agents**: Not implemented here, but compatible with agent orchestration layers.
+- **Privacy**: Run locally for sensitive PDFs; avoid uploading private data.
+
 ## ✅ Example Output (Oreo)
 
 **Query:** "What is the offer on Oreo?"
@@ -9,6 +22,8 @@ A Retrieval-Augmented Generation (RAG) system that allows you to upload PDF docu
 **Visual citation crop (from the sample Carrefour flyer):**
 
 **Sample PDF (download):** [6 - 15 Jan Super Deals Digital Leaflet.pdf](sample_pdf/6%20-%2015%20Jan%20Super%20Deals%20Digital%20Leaflet.pdf)
+
+
 
 ![Streamlit citation view](static/citations/Citation_Streamlit.png)
 
@@ -463,7 +478,7 @@ Add to PATH.
 ### 1. Clone and Setup
 
 ```bash
-cd pdf-rag-system
+cd Carrefour-vision-rag
 python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
@@ -494,7 +509,7 @@ ollama pull granite3.2-vision:2b
 
 **Terminal 1 - FastAPI Backend:**
 ```bash
-cd /Users/techmappleid/Documents/DEV/pdf-rag-system
+cd /Users/techmappleid/Documents/DEV/AI-Phd/Carrefour-vision-rag
 ```
 
 **Terminal 2 - Streamlit Frontend:**
@@ -562,7 +577,7 @@ DELETE /api/documents/{pdf_name}
 ## 📁 Project Structure
 
 ```
-pdf-rag-system/
+Carrefour-vision-rag/
 ├── src/
 │   ├── pdf_processor/     # PDF text extraction and image generation
 │   ├── multimodal_embeddings/ # CLIP text/image embeddings
@@ -646,3 +661,6 @@ This project is open source and available for use.
 - Ollama for local LLM hosting
 - Streamlit for the UI framework
 
+> **Note on data/privacy:** This repo is designed to work with your own PDFs. Avoid uploading sensitive or private documents unless you control the environment and access.
+
+> **Trademark notice:** “Carrefour” is used only to describe a publicly available flyer example. This project is not affiliated with or endorsed by Carrefour.
