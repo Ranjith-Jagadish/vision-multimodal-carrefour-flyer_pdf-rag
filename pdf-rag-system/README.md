@@ -2,11 +2,22 @@
 
 A Retrieval-Augmented Generation (RAG) system that allows you to upload PDF documents, ask questions, and get answers with visual citations showing the exact PDF pages where information is found.
 
-## 🎯 Features
+## ✅ Example Output (Oreo)
+
+**Query:** "What is the offer on Oreo?"
+
+**Visual citation crop (from the sample Carrefour flyer):**
+
+![Oreo offer crop](static/citations/8cb29edc_page_1_crop_d0585ffd.png)
+
+git## 🎯 Features
 
 - **PDF Upload**: Upload and process PDF documents
 - **Question Answering**: Ask questions about your uploaded PDFs
 - **Semantic Search**: Find relevant information using vector embeddings
+- **Multimodal RAG**: Optional hybrid search over text + image embeddings
+- **Vision Extraction**: Optional VLM-based product extraction with bounding boxes
+- **Cropped Citations**: Product-level crops in addition to full-page images
 - **Citations**: See page numbers and text snippets for each answer
 - **Visual Citations**: View images of PDF pages where answers are located
 - **Document Management**: Upload, list, and delete documents
@@ -19,13 +30,21 @@ User (Streamlit UI)
   ↓
 FastAPI Backend
   ↓
-PDF Processor → Extract text + Generate page images
+PDF Processor
+  ├─ Extract text (pdfplumber) → Text chunks
+  ├─ Render pages (pdf2image) → Page images
+  └─ Optional VLM extraction (Granite/LLaVA) → Product boxes
   ↓
-Vector Store (ChromaDB) → Store embeddings
+Vector Store (ChromaDB)
+  ├─ Text embeddings (sentence-transformers)
+  └─ Optional image embeddings (CLIP) for hybrid search
   ↓
-RAG Service → Retrieve + Generate answers
+RAG Service
+  ├─ Text search (or hybrid search)
+  ├─ Answer generation (LLM)
+  └─ Visual citations (page + product crop)
   ↓
-Response with citations and page images
+Response with citations and images
 ```
 
 ## 🔬 How It Works (Low-Level)
@@ -71,6 +90,13 @@ For visual citations, each page is converted to an image:
    - Fallback: Pattern matching `*_page_{N}.png` if hash differs
    - This handles cases where PDF path changes but images exist
 
+#### Step 2b: Optional VLM Product Extraction (Vision Models)
+If enabled, each page image is sent to a vision-language model (VLM) to extract structured product data:
+
+- **Models**: Granite 3.2 Vision or LLaVA via Ollama
+- **Output**: Product name, price, discount, and bounding boxes
+- **Use**: More precise product crops and multimodal search
+
 #### Step 3: Vector Embedding Creation
 Text chunks are converted to numerical vectors:
 
@@ -85,6 +111,10 @@ Text chunks are converted to numerical vectors:
    embeddings = embedding_model.encode(texts).tolist()
    # Result: List of 384-dim vectors
    ```
+
+3. **Optional Image Embeddings (CLIP)**:
+   - When multimodal search is enabled, product crops are embedded using CLIP
+   - These image vectors are stored in a separate ChromaDB collection
 
 #### Step 4: Vector Store Indexing
 Embeddings are stored in ChromaDB with metadata:
@@ -135,6 +165,10 @@ Find most relevant chunks using cosine similarity:
      where=filter_dict  # Optional: filter by pdf_name
    )
    ```
+
+2. **Optional Hybrid Search**:
+   - Combines text similarity with CLIP image similarity
+   - Improves product-specific queries when VLM extraction is enabled
 
 2. **Similarity Metric**: Cosine similarity
    - Range: 0.0 (dissimilar) to 1.0 (identical)
@@ -440,14 +474,16 @@ cp .env.example .env
 
 Key settings in `.env`:
 - `LLM_PROVIDER`: `ollama` or `openai`
-- `OLLAMA_MODEL`: Model name (default: `llama3.1:8b`)
+- `OLLAMA_MODEL`: Text LLM name (example: `qwen2.5:7b`)
+- `OLLAMA_VISION_MODEL`: Vision model for VLM extraction (example: `granite3.2-vision:2b`)
 - `OPENAI_API_KEY`: Your OpenAI API key (if using OpenAI)
 
 ### 3. Setup Ollama (if using local LLM)
 
 ```bash
 # Install Ollama from https://ollama.ai
-ollama pull llama3.1:8b
+ollama pull qwen2.5:7b
+ollama pull granite3.2-vision:2b
 ```
 
 ### 4. Start the Application
@@ -478,27 +514,16 @@ streamlit run frontend/streamlit_app.py --server.port 8501
    - Images of the actual PDF pages
 4. **Filter Documents**: Select a specific document from the sidebar to filter queries
 
-### Example Output (Oreo)
-
-The sample Carrefour PDF includes an Oreo offer. This is the expected visual citation crop:
-
-![Oreo offer crop](static/citations/8cb29edc_page_1_crop_d0585ffd.png)
-
 ### Example: Testing with Sample PDF
 
 The project includes a sample Carrefour flyer PDF. To test:
 
 ```bash
-# Option 1: Use test script
-python test_oreo_query.py
-
-# Option 2: Use web interface
+# Web interface
 # 1. Upload: sample_pdf/6 - 15 Jan Super Deals Digital Leaflet.pdf
 # 2. Ask: "What is the offer on Oreo?"
 # 3. View citations with page images showing the Oreo product
 ```
-
-See [TEST_OREO.md](TEST_OREO.md) for detailed testing instructions.
 
 ## 🔧 API Endpoints
 
@@ -536,8 +561,10 @@ DELETE /api/documents/{pdf_name}
 pdf-rag-system/
 ├── src/
 │   ├── pdf_processor/     # PDF text extraction and image generation
+│   ├── multimodal_embeddings/ # CLIP text/image embeddings
 │   ├── vector_store/      # ChromaDB vector store management
 │   ├── rag_service/       # RAG query processing
+│   ├── vlm_extractor/      # Vision model extraction (products + bboxes)
 │   └── main.py            # FastAPI application
 ├── frontend/
 │   └── streamlit_app.py   # Streamlit UI
@@ -558,7 +585,10 @@ pdf-rag-system/
 ```env
 LLM_PROVIDER=ollama
 OLLAMA_BASE_URL=http://localhost:11434
-OLLAMA_MODEL=llama3.1:8b
+# Text LLM (example)
+OLLAMA_MODEL=qwen2.5:7b
+# Vision model for VLM extraction (example)
+OLLAMA_VISION_MODEL=granite3.2-vision:2b
 ```
 
 **OpenAI:**
@@ -590,7 +620,7 @@ EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2
 ### Ollama Connection Error
 
 1. Ensure Ollama is running: `ollama list`
-2. Check the model is available: `ollama pull llama3.1:8b`
+2. Check the models are available: `ollama pull qwen2.5:7b` and `ollama pull granite3.2-vision:2b`
 3. Verify the base URL in `.env`
 
 ### Vector Store Issues
